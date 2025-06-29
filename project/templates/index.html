@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Student Feedback</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      text-align: center;
+      background-color: #f7f7f7;
+      padding: 50px;
+    }
+    textarea {
+      width: 400px;
+      height: 120px;
+      padding: 10px;
+      font-size: 16px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+    }
+    button, input[type=submit] {
+      padding: 10px 20px;
+      font-size: 16px;
+      margin-top: 15px;
+      border-radius: 6px;
+      border: none;
+      background-color: #007BFF;
+      color: white;
+      cursor: pointer;
+    }
+    button:hover, input[type=submit]:hover {
+      background-color: #0056b3;
+    }
+  </style>
+</head>
+<body>
+  <h2>📋Student Feedback Form</h2>
+  <form method="POST" action="/submit">
+    <textarea name="feedback" placeholder="Write your feedback..." required></textarea><br><br>
+    <input type="submit" value="Submit Feedback">
+  </form>
+
+  {% if message %}
+    <p style="color: green;">{{ message }}</p>
+  {% endif %}
+
+  <br><br>
+  <a href="/results"><button>📊 View Overall Feedback</button></a>
+</body>
+</html>
