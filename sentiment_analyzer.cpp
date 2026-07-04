@@ -1,4 +1,3 @@
-
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -31,7 +30,11 @@ struct SentimentResult {
     int score;
     double confidence;
     int sentimentWordCount;
+
+    string category;
+    vector<string> detectedAspects;
 };
+
 
 int main() {
     // Weighted sentiment words with scores
@@ -64,21 +67,90 @@ int main() {
         {"soggy", -2}, {"hard", -1}, {"chewy", -1}, {"dry", -1}, {"watery", -1}, 
         {"greasy", -2}, {"moldy", -3}, {"rotten", -3}, {"salty", -1}
     };
-    
+    unordered_map<string, vector<string>> aspects = {
+
+    {"Taste", {
+        "taste","tasty","tasteless","sweet",
+        "salty","spicy","bland","flavor"
+    }},
+
+    {"Cooking", {
+        "raw","undercooked","overcooked",
+        "cooked","stale","soggy","burnt"
+    }},
+
+    {"Hygiene", {
+        "cat","cats","dog","dogs",
+        "insect","insects","hair",
+        "dirty","hygiene"
+    }},
+
+    {"Menu", {
+        "menu","dish","variety",
+        "change","removed"
+    }},
+
+    {"Service", {
+        "staff","closed","late",
+        "timing","timings"
+    }},
+
+    {"Quality", {
+        "quality","poor","good",
+        "bad","excellent"
+    }}
+};
+vector<string> suggestionKeywords = {
+
+    "please add",
+    "bring back",
+    "should be replaced",
+    "change menu",
+    "add to menu",
+    "kindly",
+    "request"
+};
+unordered_map<string,int> phrases = {
+
+    {"not good",-3},
+    {"not tasty",-3},
+
+    {"too oily",-3},
+    {"very oily",-3},
+
+    {"raw chicken",-5},
+    {"undercooked",-4},
+    {"not cooked",-4},
+    {"not cooked properly",-5},
+
+    {"poor quality",-4},
+    {"very bad",-4},
+    {"horrible",-4},
+    {"tasteless",-3},
+
+    {"stale",-3},
+    {"watery curd",-3},
+
+    {"cats lick",-5},
+    {"dogs roam",-4},
+
+    {"insects",-5},
+    {"hair",-5},
+
+    {"menu different",-3},
+    {"same taste",-2},
+
+    {"excellent",3},
+    {"very good",3},
+    {"really tasty",3}
+};
     unordered_set<string> negations = {"not", "no", "isn't", "wasn't", "aren't", "doesn't", "don't", "didn't", "never", "without", "neither", "none", "nobody", "nothing", "nowhere", "hardly", "barely", "scarcely"};
     
     unordered_set<string> intensifiers = {"very", "really", "extremely", "absolutely", "completely", "totally", "utterly"};
     unordered_set<string> diminishers = {"somewhat", "slightly", "kind", "sort", "bit", "little"};
     
     // Phrase-level sentiment detection (phrase -> score)
-    unordered_map<string, int> phrases = {
-        {"not good", -2}, {"not tasty", -2}, {"not cooked", -2}, {"no quality", -2}, 
-        {"never fresh", -2}, {"very good", 3}, {"really tasty", 3}, {"well cooked", 2}, 
-        {"perfectly seasoned", 3}, {"fresh and delicious", 3}, {"love the food", 3},
-        {"very bad", -3}, {"horrible taste", -3}, {"awful quality", -3}, 
-        {"undercooked chicken", -3}, {"stale food", -3}, {"oily food", -2},
-        {"not at all good", -3}, {"not nice", -2}, {"not all tasty", -2}
-    };
+   
 
     ifstream infile("food_reviews.txt");
     if (!infile) {
@@ -91,7 +163,75 @@ int main() {
     int pos = 0, neg = 0, neu = 0, total = 0, totalScore = 0;
     double maxScore = INT_MIN, minScore = INT_MAX;
     string best, worst;
+    unordered_map<string,int> aspectCount;
+    unordered_map<string,int> likedItems;
+unordered_map<string,int> dislikedItems;
 
+vector<string> foodItems = {
+    "puri",
+    "dalia",
+    "cornflakes",
+    "boiled egg",
+    "banana",
+    "vada",
+    "ghuguni",
+    "uttapam",
+    "methi puri",
+    "plain dosa",
+    "chole bhature",
+    "masala dosa",
+    "plain paratha",
+
+    "rice",
+    "dal",
+    "sambar",
+    "roti",
+    "rajma",
+    "aloo chokha",
+    "seasonal khatta",
+    "dahi curry",
+    "saag",
+    "salad",
+    "tomato rice",
+    "mix vegetable",
+    "palak paneer",
+    "ghanta",
+    "aloo masala",
+    "khechdi",
+    "kerala chips",
+    "fish masala",
+    "pumpkin curry",
+    "drumsticks",
+    "bhindi masala",
+    "chicken",
+    "paneer",
+    "mushroom chilli",
+    "chhole",
+    "bundi raita",
+
+    "samosa",
+    "jalebi",
+    "watermelon",
+    "tea",
+    "coffee",
+    "summer drink",
+    "pani bhaji",
+    "dahi vada",
+    "veg sandwich",
+    "chat",
+    "noodles",
+    "pasta",
+    "chatpata sprouts",
+
+    "paneer chilli",
+    "veg manchurian",
+    "chana masala",
+    "egg masala curry",
+    "sweet",
+    "fruit custard",
+    "raita",
+    "potato fingers"
+};
     while (getline(infile, line)) {
         if (line.empty() || line.find_first_not_of(" \t\n\r") == string::npos) {
             continue; // Skip empty lines
@@ -101,19 +241,14 @@ int main() {
         vector<string> words = tokenize(line);
         int score = 0;
         int sentimentWordCount = 0;
-        
+        vector<bool> used(words.size(), false);
         // Step 1: Check for phrase-level sentiment first
         bool phraseMatched = false;
-        for (const auto& phrase : phrases) {
-            if (lowerLine.find(phrase.first) != string::npos) {
-                score += phrase.second;
-                sentimentWordCount += 2; // Count as 2 words for confidence
-                phraseMatched = true;
-            }
-        }
+        
         
         // Step 2: Word-level analysis with negation window
-        if (!phraseMatched || words.size() > 5) { // Still analyze words if long review
+        // Only do word-level analysis if no phrase was matched OR if review is very long (need additional context)
+        if (!phraseMatched) {
             vector<bool> negationWindow(words.size(), false);
             
             // Mark negation window (next 3 words after negation)
@@ -156,7 +291,22 @@ int main() {
                 }
             }
         }
-        
+        for(size_t i=0;i+1<words.size();i++)
+{
+      if(used[i])
+        continue;
+    string pairPhrase = words[i] + " " + words[i+1];
+
+    if(phrases.count(pairPhrase))
+    {
+        score += phrases[pairPhrase];
+
+        used[i] = true;
+        used[i+1] = true;
+
+        sentimentWordCount += 2;
+    }
+}
         // Step 3: Calculate confidence score
         double confidence = 0.0;
         if (words.size() > 0) {
@@ -165,8 +315,70 @@ int main() {
             confidence = min(1.0, (sentimentRatio * 2.0) + (scoreMagnitude * 0.5));
         }
         
-        SentimentResult result = {score, confidence, sentimentWordCount};
-        
+SentimentResult result;
+result.score = score;
+result.confidence = confidence;
+result.sentimentWordCount = sentimentWordCount;
+result.category = "";
+result.detectedAspects.clear();
+     for(auto& aspect : aspects)
+{
+    bool found = false;
+
+    for(auto& keyword : aspect.second)
+    {
+        if(lowerLine.find(keyword) != string::npos)
+        {
+            found = true;
+            break;
+        }
+    }
+
+    if(found)
+result.detectedAspects.push_back(aspect.first);
+aspectCount[aspect.first]++;
+}
+bool isSuggestion = false;
+
+for(const auto& keyword : suggestionKeywords)
+{
+    if(lowerLine.find(keyword) != string::npos)
+    {
+        isSuggestion = true;
+        break;
+    }
+}
+
+if(isSuggestion)
+{
+    result.category = "Suggestion";
+}
+else if(score > 0)
+{
+    result.category = "Positive";
+}
+else if(score < 0)
+{
+    result.category = "Negative";
+}
+else
+{
+    result.category = "Neutral";
+}
+for(const auto& item : foodItems)
+{
+    if(lowerLine.find(item) != string::npos)
+    {
+        if(score > 0)
+        {
+            likedItems[item]++;
+        }
+        else if(score < 0)
+        {
+            dislikedItems[item]++;
+        }
+    }
+}
         totalScore += score;
         if (score > 0) pos++;
         else if (score < 0) neg++;
@@ -184,6 +396,7 @@ int main() {
         }
 
         feedbacks.push_back({line, result});
+
         total++;
     }
 
@@ -198,7 +411,47 @@ int main() {
     cout << "📊 Total Feedbacks: " << total << endl;
     cout << "✅ Positive: " << pos << ", ❌ Negative: " << neg << ", ⚪ Neutral: " << neu << endl;
     cout << "📈 Average Score: " << avg << " " << mood << endl << endl;
+    cout << "\n===== Most Appreciated Items =====\n";
 
+vector<pair<string,int>> goodList(
+    likedItems.begin(),
+    likedItems.end()
+);
+
+sort(goodList.begin(), goodList.end(),
+[](auto &a, auto &b)
+{
+    return a.second > b.second;
+});
+
+for(size_t i=0; i<min((size_t)5, goodList.size()); i++)
+{
+    cout << goodList[i].first
+         << " : "
+         << goodList[i].second
+         << " positive mentions\n";
+}
+
+cout << "\n===== Most Complained About =====\n";
+
+vector<pair<string,int>> badList(
+    dislikedItems.begin(),
+    dislikedItems.end()
+);
+
+sort(badList.begin(), badList.end(),
+[](auto &a, auto &b)
+{
+    return a.second > b.second;
+});
+
+for(size_t i=0; i<min((size_t)5, badList.size()); i++)
+{
+    cout << badList[i].first
+         << " : "
+         << badList[i].second
+         << " negative mentions\n";
+}
     cout << "🌟 Top 3 Positive Feedbacks:\n";
     sort(feedbacks.begin(), feedbacks.end(), [](auto& a, auto& b) { 
         return a.second.score * a.second.confidence > b.second.score * b.second.confidence; 
@@ -217,5 +470,16 @@ int main() {
             cout << i+1 << ". " << feedbacks[i].first << " (Score: " << feedbacks[i].second.score 
                  << ", Confidence: " << fixed << setprecision(2) << feedbacks[i].second.confidence << ")" << endl;
 
-    return 0;
+    cout << "\n===== Aspect Summary =====\n";
+
+for(const auto& item : aspectCount)
+{
+    cout << item.first
+         << " : "
+         << item.second
+         << " mentions"
+         << endl;
+}
+
+                 return 0;
 }

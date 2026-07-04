@@ -4,6 +4,8 @@ import os
 
 app = Flask(__name__)
 
+ADMIN_PASSWORD = "admin123"
+
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -19,7 +21,14 @@ def submit():
     return render_template('index.html', message="✅ Feedback submitted successfully!")
 
 @app.route('/results')
+@app.route('/results')
 def results():
+
+    password = request.args.get("password")
+
+    if password != ADMIN_PASSWORD:
+        return "<h3>Access Denied</h3>"
+
     try:
         BASE_DIR = os.path.dirname(os.path.abspath(__file__))
         exe_path = os.path.join(BASE_DIR, "sentiment_analyzer.exe")
@@ -27,6 +36,8 @@ def results():
         output = subprocess.check_output(
             [exe_path],
             text=True,
+            encoding="utf-8",
+            errors="ignore",
             cwd=BASE_DIR,
             stderr=subprocess.STDOUT
         )
@@ -38,6 +49,5 @@ def results():
 
     except FileNotFoundError:
         return "<h3>❌ sentiment_analyzer.exe not found in project folder.</h3>"
-
 if __name__ == '__main__':
     app.run(debug=True, host="0.0.0.0")
